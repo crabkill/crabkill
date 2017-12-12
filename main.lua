@@ -10,26 +10,82 @@ debug = true
 
 num = 0
 player = {
-  x = 1,
-  y = 1,
+  x = 200,
+  y = 300,
   cx = 24,
   cy = 33,
   angle = 0,
   speed = 250,
-  dir_x = 1,
-  dir_y = 1,
   img = nil,
+  score = 0,
   heat = 0,
-	heatp = 0.1
+	heatp = 0.05 -- bullet rate
 }
+
+car = { x = 200, y = 200, angle = math.pi /3, img = nil }
 
 bullets = { }
 
+ennemies = {}
+en_spawn_rate=5
+en_spawn_timer=10
+
+function ennemies_spawn(dt)
+   if en_spawn_timer == 0 then
+       table.insert(ennemies, {
+           x = love.math.random( 800 ),
+           y = love.math.random( 600 ),
+           dir = 0,
+           speed = 150
+       })
+       en_spawn_timer = en_spawn_rate
+   end
+   en_spawn_timer = math.max(0, en_spawn_timer - dt)
+end
+
+function ennemies_move(dt)
+  for i, o in ipairs(ennemies) do
+   o.dir = math.pi/6 + math.atan2(player.y - o.y, player.x - o.x)
+  	o.x = o.x + math.cos(o.dir) * o.speed * dt
+  	o.y = o.y + math.sin(o.dir) * o.speed * dt
+  end
+end
+
+function bullets_hit()
+  for i = #ennemies, 1, -1 do
+  	local e = ennemies[i]
+    for j = #bullets, 1, -1 do
+      local b = bullets[j]
+      local dist = (e.x - b.x)^2 + (e.y - b.y)^2
+      if dist < 100 then
+          player.score = player.score + 1
+          table.remove(ennemies, i)
+          table.remove(bullets, j)
+      end
+    end
+  end
+end
+
 function love.load(arg)
-  problem = love.graphics.newImage('assets/problem.png')
+  scene = love.graphics.newImage('assets/scene.png')
   player.img = love.graphics.newImage('assets/player.png')
-  car = love.graphics.newImage('assets/car.png')
+  car.img = love.graphics.newImage('assets/car.png')
   sound = love.audio.newSource('assets/shot.ogg')
+  crab_img = love.graphics.newImage('assets/crab.png')
+end
+
+function love.update(dt)
+
+  watch_escape()
+  watch_mouse()
+  watch_player_move(dt)
+  watch_player_shoot()
+  player.heat = math.max(0, player.heat - dt)
+  bullets_move(dt)
+  bullets_remove()
+  ennemies_spawn(dt)
+  ennemies_move(dt)
+  bullets_hit()
 end
 
 function watch_mouse()
@@ -46,41 +102,23 @@ function watch_escape()
   end
 end
 
-function love.update(dt)
-
-  watch_escape()
-  watch_mouse()
-  watch_player_move(dt)
-
-  if player.x > 800 then
-    player.dir_x = -player.dir_x
-  elseif player.x < 0 then
-    player.dir_x = -player.dir_x
-  elseif player.y > 600 then
-    player.dir_y = -player.dir_y
-  elseif player.y <= 0 then
-    player.dir_y = -player.dir_y
-  end
-
-  watch_player_shoot()
-  player.heat = math.max(0, player.heat - dt)
-  bullets_move(dt)
-  bullets_remove()
-end
-
 function watch_player_move(dt)
   if love.keyboard.isDown('up','w') then
-    player.dir_y = -1
-    player.y = player.y + player.speed * player.dir_y * dt
+    if player.y > 0 then
+      player.y = player.y - player.speed * dt
+    end
   elseif love.keyboard.isDown('down','s') then
-    player.dir_y = 1
-    player.y = player.y + player.speed * player.dir_y * dt
+    if player.y < love.graphics.getHeight() then
+      player.y = player.y + player.speed * dt
+    end
   elseif love.keyboard.isDown('left','a') then
-    player.dir_x = -1
-    player.x = player.x + player.speed * player.dir_x * dt
+    if player.x > 0 then
+      player.x = player.x - player.speed * dt
+    end
   elseif love.keyboard.isDown('right','d') then
-    player.dir_x = 1
-    player.x = player.x + player.speed * player.dir_x * dt
+    if player.x < love.graphics.getWidth() then
+      player.x = player.x + player.speed * dt
+    end
   end
 end
 
@@ -97,7 +135,6 @@ function watch_player_shoot()
   	player.heat = player.heatp
   end
 end
-
 
 function bullets_move(dt)
   for i, o in ipairs(bullets) do
@@ -116,17 +153,21 @@ function bullets_remove()
   end
 end
 
-function draw_player()
-  love.graphics.setColor(255,255,255,255);
-  love.graphics.draw(player.img,
-                     player.x,
-                     player.y,
-                     player.angle,
-                     1,
-                     1,
-                     player.cx,
-                     player.cy)
+function draw_canvas()
+  -- love.graphics.setBackgroundColor(253, 250, 232)
 end
+
+function draw_scene()
+  love.graphics.draw(scene, 0 ,0)
+end
+
+function draw_score()
+  love.graphics.setColor(1, 85, 229)
+  love.graphics.setNewFont(18)
+  love.graphics.print("crabs killed: " .. tostring(player.score), 50, 30)
+  love.graphics.setColor(255, 255, 255)
+end
+
 
 function draw_text()
   love.graphics.setColor(1, 85, 229)
@@ -137,32 +178,44 @@ function draw_text()
   love.graphics.setColor(255, 255, 255)
 end
 
-function draw_face()
-  love.graphics.setColor(0,0,0);
-  love.graphics.draw(problem, 100, 100)
+function draw_car()
+  love.graphics.draw(car.img, car.x, car.y, car.angle)
+end
+
+function draw_player()
+  love.graphics.draw(player.img,
+                     player.x, player.y,
+                     player.angle,
+                     1, 1,
+                     player.cx, player.cy)
   love.graphics.setColor(255,255,255);
 end
 
-function draw_canvas()
-  love.graphics.setBackgroundColor(253, 250, 232)
-end
-
 function draw_bullets()
-  love.graphics.setColor(50, 50, 150, 255)
+  love.graphics.setColor(50, 50, 150)
 	for i, o in ipairs(bullets) do
 		love.graphics.circle('fill', o.x, o.y, 10, 8)
 	end
+  love.graphics.setColor(255, 255, 255)
 end
 
-function draw_car()
-  love.graphics.draw(car, 200, 200)
+function draw_ennemies()
+	for i, o in ipairs(ennemies) do
+		love.graphics.draw(crab_img,
+                     o.x, o.y,
+                     o.dir,
+                     1, 1,
+                     20, 10)
+	end
 end
 
 function love.draw(dt)
   draw_canvas()
-  draw_face()
-  draw_text()
+  draw_scene()
+  draw_score()
+  -- draw_text()
   draw_car()
   draw_player()
   draw_bullets()
+  draw_ennemies()
 end
